@@ -17,9 +17,14 @@ fn close_window(window: tauri::Window) {
 fn get_str_arg() -> String {
     // 获取命令行参数
     let args: Vec<String> = env::args().collect();
+    parse_str_arg(&args)
+}
+
+// 解析命令行参数中的字符串参数
+fn parse_str_arg(args: &[String]) -> String {
     let mut str_arg = "欢迎使用Better Notification!!".to_string();
 
-    // 解析命令行参数
+    // 查找并解析 -str 参数
     for i in 0..args.len() {
         if args[i] == "-str" && i + 1 < args.len() {
             str_arg = args[i + 1].clone();
@@ -31,14 +36,12 @@ fn get_str_arg() -> String {
     str_arg.replace("\\n", "\n")
 }
 
-fn main() {
-    // 获取命令行参数
-    let args: Vec<String> = env::args().collect();
+// 解析命令行参数中的窗口位置参数
+fn parse_position(args: &[String]) -> (Option<f64>, Option<f64>) {
     let mut x_pos = None;
     let mut y_pos = None;
-    let mut close_delay = None;
 
-    // 解析命令行参数
+    // 查找并解析 -x 和 -y 参数
     for i in 0..args.len() {
         if args[i] == "-x" && i + 1 < args.len() {
             if let Ok(x) = args[i + 1].parse::<f64>() {
@@ -48,40 +51,70 @@ fn main() {
             if let Ok(y) = args[i + 1].parse::<f64>() {
                 y_pos = Some(y);
             }
-        } else if args[i] == "-t" && i + 1 < args.len() {
+        }
+    }
+
+    (x_pos, y_pos)
+}
+
+// 解析命令行参数中的关闭延迟参数
+fn parse_close_delay(args: &[String]) -> Option<u64> {
+    // 查找并解析 -t 参数
+    for i in 0..args.len() {
+        if args[i] == "-t" && i + 1 < args.len() {
             if let Ok(t) = args[i + 1].parse::<u64>() {
-                close_delay = Some(t);
+                return Some(t);
             }
         }
     }
+
+    None
+}
+
+// 动态调整窗口大小
+fn adjust_window_size(window: &tauri::Window, str_arg: &str) {
+    let str_len = str_arg.chars().count();
+
+    // 基础窗口宽高
+    let base_width = 300.0;
+    let base_height = 100.0;
+    let char_width = 10.0; // 每个字符增加的宽度
+    let max_width = 500.0; // 最大宽度
+    let chars_per_line = (max_width / char_width) as usize; // 每行字符数
+    let lines = (str_len as f64 / chars_per_line as f64).ceil() as f64; // 行数
+    let new_width = (base_width + (str_len as f64 * char_width)).min(max_width); // 限制最大宽度
+    let new_height = base_height + (lines * 20.0); // 每行增加的高度
+
+    window
+        .set_size(LogicalSize::new(new_width, new_height))
+        .unwrap(); // 设置窗口大小
+}
+
+// 获取屏幕尺寸
+fn get_screen_size(window: &tauri::Window) -> (f64, f64) {
+    let monitor = window.current_monitor().unwrap().unwrap();
+    let screen_size = monitor.size();
+    (screen_size.width as f64, screen_size.height as f64)
+}
+
+fn main() {
+    // 获取命令行参数
+    let args: Vec<String> = env::args().collect();
+    let (x_pos, y_pos) = parse_position(&args);
+    let close_delay = parse_close_delay(&args);
 
     tauri::Builder::default()
         .setup(move |app| {
             let window = app.get_window("main").unwrap(); // 替换成你的窗口标签
 
             // 获取屏幕尺寸
-            let monitor = window.current_monitor().unwrap().unwrap();
-            let screen_size = monitor.size();
-            let screen_width = screen_size.width as f64;
-            let screen_height = screen_size.height as f64;
+            let (screen_width, screen_height) = get_screen_size(&window);
 
-            // 获取字符串并计算长度
-            let str_arg = get_str_arg();
-            let str_len = str_arg.chars().count();
+            // 获取字符串参数
+            let str_arg = parse_str_arg(&args);
 
             // 动态调整窗口大小
-            let base_width = 300.0;
-            let base_height = 100.0;
-            let char_width = 10.0; // 每个字符增加的宽度
-            let max_width = 500.0; // 最大宽度
-            let chars_per_line = (max_width / char_width) as usize; // 每行字符数
-            let lines = (str_len as f64 / chars_per_line as f64).ceil() as f64; // 行数
-            let new_width = (base_width + (str_len as f64 * char_width)).min(max_width); // 限制最大宽度
-            let new_height = base_height + (lines * 20.0); // 每行增加的高度
-
-            window
-                .set_size(LogicalSize::new(new_width, new_height))
-                .unwrap(); // 设置窗口大小
+            adjust_window_size(&window, &str_arg);
 
             // 获取窗口尺寸
             let window_size = window.outer_size().unwrap();
