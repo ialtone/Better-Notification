@@ -1,5 +1,7 @@
 <template>
-    <div class="box"></div>
+    <div class="box">
+        welcome
+    </div>
 </template>
 
 <script setup>
