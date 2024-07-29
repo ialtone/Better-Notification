@@ -1,101 +1,15 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod commands;
+mod utils;
+
+use commands::{close_window, get_route_arg, get_str_arg};
 use std::env;
 use std::thread;
 use std::time::Duration;
-
-use tauri::{LogicalSize, Manager, PhysicalPosition}; // 引入 PhysicalPosition 和 LogicalSize
-
-#[tauri::command]
-fn close_window(window: tauri::Window) {
-    // 关闭窗口
-    window.close().unwrap();
-}
-
-#[tauri::command]
-fn get_str_arg() -> String {
-    // 获取命令行参数
-    let args: Vec<String> = env::args().collect();
-    parse_str_arg(&args)
-}
-
-// 解析命令行参数中的字符串参数
-fn parse_str_arg(args: &[String]) -> String {
-    let mut str_arg = "欢迎使用Better Notification!!".to_string();
-
-    // 查找并解析 -str 参数
-    for i in 0..args.len() {
-        if args[i] == "-str" && i + 1 < args.len() {
-            str_arg = args[i + 1].clone();
-            break; // 找到后直接退出循环
-        }
-    }
-
-    // 将 \n 转换为实际换行符
-    str_arg.replace("\\n", "\n")
-}
-
-// 解析命令行参数中的窗口位置参数
-fn parse_position(args: &[String]) -> (Option<f64>, Option<f64>) {
-    let mut x_pos = None;
-    let mut y_pos = None;
-
-    // 查找并解析 -x 和 -y 参数
-    for i in 0..args.len() {
-        if args[i] == "-x" && i + 1 < args.len() {
-            if let Ok(x) = args[i + 1].parse::<f64>() {
-                x_pos = Some(x);
-            }
-        } else if args[i] == "-y" && i + 1 < args.len() {
-            if let Ok(y) = args[i + 1].parse::<f64>() {
-                y_pos = Some(y);
-            }
-        }
-    }
-
-    (x_pos, y_pos)
-}
-
-// 解析命令行参数中的关闭延迟参数
-fn parse_close_delay(args: &[String]) -> Option<u64> {
-    // 查找并解析 -t 参数
-    for i in 0..args.len() {
-        if args[i] == "-t" && i + 1 < args.len() {
-            if let Ok(t) = args[i + 1].parse::<u64>() {
-                return Some(t);
-            }
-        }
-    }
-
-    None
-}
-
-// 动态调整窗口大小
-fn adjust_window_size(window: &tauri::Window, str_arg: &str) {
-    let str_len = str_arg.chars().count();
-
-    // 基础窗口宽高
-    let base_width = 300.0;
-    let base_height = 100.0;
-    let char_width = 10.0; // 每个字符增加的宽度
-    let max_width = 500.0; // 最大宽度
-    let chars_per_line = (max_width / char_width) as usize; // 每行字符数
-    let lines = (str_len as f64 / chars_per_line as f64).ceil() as f64; // 行数
-    let new_width = (base_width + (str_len as f64 * char_width)).min(max_width); // 限制最大宽度
-    let new_height = base_height + (lines * 20.0); // 每行增加的高度
-
-    window
-        .set_size(LogicalSize::new(new_width, new_height))
-        .unwrap(); // 设置窗口大小
-}
-
-// 获取屏幕尺寸
-fn get_screen_size(window: &tauri::Window) -> (f64, f64) {
-    let monitor = window.current_monitor().unwrap().unwrap();
-    let screen_size = monitor.size();
-    (screen_size.width as f64, screen_size.height as f64)
-}
+use tauri::{Manager, PhysicalPosition};
+use utils::{adjust_window_size, get_screen_size, parse_close_delay, parse_position};
 
 fn main() {
     // 获取命令行参数
@@ -111,7 +25,7 @@ fn main() {
             let (screen_width, screen_height) = get_screen_size(&window);
 
             // 获取字符串参数
-            let str_arg = parse_str_arg(&args);
+            let str_arg = get_str_arg();
 
             // 动态调整窗口大小
             adjust_window_size(&window, &str_arg);
@@ -144,7 +58,11 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_str_arg, close_window])
+        .invoke_handler(tauri::generate_handler![
+            close_window,
+            get_str_arg,
+            get_route_arg
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
